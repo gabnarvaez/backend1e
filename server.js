@@ -1,10 +1,10 @@
 const express = require("express");
 const cors = require("cors");
-const fs = require("fs");
 const { engine } = require("express-handlebars");
 const path = require("path");
 const http = require("http");
 const socketIo = require("socket.io");
+const ProductManager = require("./dao/ProductManager");
 
 const productsRouter = require("./routes/products.routes.js");
 const cartsRouter = require("./routes/carts.routes.js");
@@ -13,64 +13,53 @@ const app = express();
 const PORT = 8080;
 const server = http.createServer(app);
 const io = socketIo(server);
+const productManager = new ProductManager();
 
+// Middlewares
 app.use(express.json());
 app.use(cors());
 
+// Configuración de Handlebars
 app.engine("handlebars", engine());
 app.set("view engine", "handlebars");
 app.set("views", path.join(__dirname, "views"));
 
-const PRODUCTS_FILE = path.join(__dirname, "Data", "products.json");
-
-const loadProducts = () => {
-    try {
-        if (!fs.existsSync(PRODUCTS_FILE)) {
-            fs.writeFileSync(PRODUCTS_FILE, "[]");
-        }
-        return JSON.parse(fs.readFileSync(PRODUCTS_FILE, "utf-8"));
-    } catch (error) {
-        console.error("❌ Error al cargar productos:", error);
-        return [];
-    }
-};
-
-const saveProducts = (products) => {
-    try {
-        fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
-    } catch (error) {
-        console.error("❌ Error al guardar productos:", error);
-    }
-};
-
-let products = loadProducts();
-
+// Rutas API
 app.use("/api/products", productsRouter);
 app.use("/api/carts", cartsRouter);
 
-app.get("/", (req, res) => res.render("home", { products }));
-app.get("/realtimeproducts", (req, res) => res.render("realTimeProducts", { products }));
+// Rutas de vistas
+app.get("/", async (req, res) => {
+    const products = await productManager.getProducts();
+    res.render("home", { products });
+});
 
-io.on("connection", (socket) => {
+app.get("/realtimeproducts", async (req, res) => {
+    const products = await productManager.getProducts();
+    res.render("realTimeProducts", { products });
+});
+
+// WebSockets
+io.on("connection", async (socket) => {
     console.log("🟢 Cliente conectado");
 
-    socket.emit("updateProducts", products);
+    // Enviar productos actuales
+    socket.emit("updateProducts", await productManager.getProducts());
 
-    socket.on("newProduct", (product) => {
-        product.id = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-        products.push(product);
-        saveProducts(products);
-        io.emit("updateProducts", products);
+    // Agregar producto
+    socket.on("newProduct", async (product) => {
+        const newProduct = await productManager.addProduct(product);
+        io.emit("updateProducts", await productManager.getProducts());
     });
 
-    socket.on("deleteProduct", (id) => {
-        id = Number(id);
-        products = products.filter(product => product.id !== id);
-        saveProducts(products);
-        io.emit("updateProducts", products);
+    // Eliminar producto
+    socket.on("deleteProduct", async (id) => {
+        await productManager.deleteProduct(Number(id));
+        io.emit("updateProducts", await productManager.getProducts());
     });
 
     socket.on("disconnect", () => console.log("🔴 Cliente desconectado"));
 });
 
+// Iniciar servidor
 server.listen(PORT, () => console.log(`🚀 Servidor escuchando en http://localhost:${PORT}`));
