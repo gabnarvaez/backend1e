@@ -19,7 +19,9 @@ router.post("/", async (req, res) => {
 router.get("/:cid", async (req, res) => {
   try {
     const cid = parseInt(req.params.cid);
-    if (isNaN(cid)) return res.status(400).json({ error: "ID de carrito inválido" });
+    if (isNaN(cid) || cid <= 0) {
+      return res.status(400).json({ error: "ID de carrito inválido" });
+    }
 
     const cart = await cartManager.getCartById(cid);
     if (cart) {
@@ -39,7 +41,7 @@ router.post("/:cid/product/:pid", async (req, res) => {
     const cid = parseInt(req.params.cid);
     const pid = parseInt(req.params.pid);
 
-    if (isNaN(cid) || isNaN(pid)) {
+    if (isNaN(cid) || cid <= 0 || isNaN(pid) || pid <= 0) {
       return res.status(400).json({ error: "ID de carrito o producto inválido" });
     }
 
@@ -56,4 +58,5 @@ router.post("/:cid/product/:pid", async (req, res) => {
 });
 
 module.exports = router;
+
 
