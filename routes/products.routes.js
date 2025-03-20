@@ -1,88 +1,145 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const ProductManager = require("../managers/ProductManager");
 
 const router = express.Router();
 const productManager = new ProductManager();
 
-// Obtener todos los productos
+// 🔥 GET /products con paginación, filtros y ordenamiento (JSON)
 router.get("/", async (req, res) => {
-  try {
-    const products = await productManager.getProducts();
-    res.json(products);
-  } catch (error) {
-    console.error("Error al obtener productos:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
+    try {
+        let { limit = 10, page = 1, sort, query } = req.query;
+        limit = parseInt(limit);
+        page = parseInt(page);
+
+        // Filtros
+        let filter = {};
+        if (query) {
+            if (query === "disponible") {
+                filter.availability = true;
+            } else if (query === "nodisponible") {
+                filter.availability = false;
+            } else {
+                filter.category = query;
+            }
+        }
+
+        // Ordenamiento
+        let sortOption = {};
+        if (sort === "asc") {
+            sortOption.price = 1;
+        } else if (sort === "desc") {
+            sortOption.price = -1;
+        }
+
+        const productsData = await productManager.getProductsPaginated(filter, limit, page, sortOption);
+
+        res.json(productsData);
+    } catch (error) {
+        console.error("Error al obtener productos:", error);
+        res.status(500).json({ error: "Error interno del servidor" });
+    }
 });
 
-// Obtener producto por ID
+// 🔥 GET /products/view con paginación y renderizado de vista handlebars
+router.get("/view", async (req, res) => {
+    try {
+        let { limit = 10, page = 1, sort, query } = req.query;
+        limit = parseInt(limit);
+        page = parseInt(page);
+
+        let filter = {};
+        if (query) {
+            if (query === "disponible") {
+                filter.availability = true;
+            } else if (query === "nodisponible") {
+                filter.availability = false;
+            } else {
+                filter.category = query;
+            }
+        }
+
+        let sortOption = {};
+        if (sort === "asc") {
+            sortOption.price = 1;
+        } else if (sort === "desc") {
+            sortOption.price = -1;
+        }
+
+        const productsData = await productManager.getProductsPaginated(filter, limit, page, sortOption);
+
+        res.render("home", productsData);
+    } catch (error) {
+        console.error("Error al renderizar productos:", error);
+        res.status(500).send("Error cargando productos");
+    }
+});
+
+// 🔥 Vista para detalle del producto
+router.get("/view/:pid", async (req, res) => {
+    try {
+        const pid = req.params.pid;
+        if (!mongoose.Types.ObjectId.isValid(pid)) {
+            return res.status(400).send("ID inválido");
+        }
+
+        const product = await productManager.getProductById(pid);
+        if (!product) {
+            return res.status(404).send("Producto no encontrado");
+        }
+
+        res.render("productDetail", { product });
+    } catch (error) {
+        console.error("Error al cargar producto:", error);
+        res.status(500).send("Error al cargar producto");
+    }
+});
+
+// 🔥 GET /products/:pid con ObjectId (JSON)
 router.get("/:pid", async (req, res) => {
-  try {
-    const pid = parseInt(req.params.pid);
-    if (isNaN(pid)) return res.status(400).json({ error: "ID de producto inválido" });
+    const pid = req.params.pid;
+    if (!mongoose.Types.ObjectId.isValid(pid)) {
+        return res.status(400).json({ error: "ID de producto inválido" });
+    }
 
     const product = await productManager.getProductById(pid);
-    if (product) {
-      res.json(product);
-    } else {
-      res.status(404).json({ error: "Producto no encontrado" });
-    }
-  } catch (error) {
-    console.error("Error al obtener producto por ID:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
+    product ? res.json(product) : res.status(404).json({ error: "Producto no encontrado" });
 });
 
-// Crear un nuevo producto
+// POST (crear producto)
 router.post("/", async (req, res) => {
-  try {
-    const { title, description, price, stock, category } = req.body;
-    if (!title || !description || !price || !stock || !category) {
-      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    try {
+        const product = await productManager.addProduct(req.body);
+        res.status(201).json(product);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-
-    const newProduct = await productManager.addProduct(req.body);
-    res.status(201).json(newProduct);
-  } catch (error) {
-    console.error("Error al agregar producto:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
 });
 
-// Actualizar un producto
+// PUT (actualizar producto)
 router.put("/:pid", async (req, res) => {
-  try {
-    const pid = parseInt(req.params.pid);
-    if (isNaN(pid)) return res.status(400).json({ error: "ID de producto inválido" });
+    const pid = req.params.pid;
+    if (!mongoose.Types.ObjectId.isValid(pid)) {
+        return res.status(400).json({ error: "ID inválido" });
+    }
 
     const updatedProduct = await productManager.updateProduct(pid, req.body);
-    if (updatedProduct) {
-      res.json(updatedProduct);
-    } else {
-      res.status(404).json({ error: "Producto no encontrado" });
-    }
-  } catch (error) {
-    console.error("Error al actualizar producto:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
+    updatedProduct ? res.json(updatedProduct) : res.status(404).json({ error: "Producto no encontrado" });
 });
 
-// Eliminar un producto
+// DELETE
 router.delete("/:pid", async (req, res) => {
-  try {
-    const pid = parseInt(req.params.pid);
-    if (isNaN(pid)) return res.status(400).json({ error: "ID de producto inválido" });
+    try {
+        const pid = req.params.pid;
+        if (!mongoose.Types.ObjectId.isValid(pid)) {
+            return res.status(400).json({ error: "ID inválido" });
+        }
 
-    const deletedProduct = await productManager.deleteProduct(pid);
-    if (deletedProduct) {
-      res.status(204).send();
-    } else {
-      res.status(404).json({ error: "Producto no encontrado" });
+        const result = await productManager.deleteProduct(pid);
+        res.json(result);
+    } catch (error) {
+        res.status(400).json({ error: error.message });
     }
-  } catch (error) {
-    console.error("Error al eliminar producto:", error);
-    res.status(500).json({ error: "Error interno del servidor" });
-  }
 });
 
 module.exports = router;

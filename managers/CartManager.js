@@ -1,40 +1,21 @@
-const fs = require("fs");
-const path = require("path");
+const Cart = require("../models/Cart.model.js");
+const mongoose = require("mongoose");
 
 class CartManager {
-  constructor() {
-    this.cartsFile = path.join(__dirname, "../data/carts.json");
-  }
-
   async getCarts() {
     try {
-      if (!fs.existsSync(this.cartsFile)) return [];
-      
-      const data = await fs.promises.readFile(this.cartsFile, "utf-8");
-      return data ? JSON.parse(data) : [];
+      const carts = await Cart.find().populate('products.product');
+      return carts;
     } catch (error) {
-      console.error("Error al leer los carritos:", error);
+      console.error("Error al obtener carritos:", error);
       return [];
-    }
-  }
-
-  async saveCarts(carts) {
-    try {
-      await fs.promises.writeFile(this.cartsFile, JSON.stringify(carts, null, 2));
-    } catch (error) {
-      console.error("Error al guardar los carritos:", error);
     }
   }
 
   async addCart() {
     try {
-      const carts = await this.getCarts();
-      const id = carts.length > 0 ? carts[carts.length - 1].id + 1 : 1;  
-      const newCart = { id, products: [] };
-      
-      carts.push(newCart);
-      await this.saveCarts(carts);
-
+      const newCart = new Cart({ products: [] });
+      await newCart.save();
       return newCart;
     } catch (error) {
       console.error("Error al agregar un carrito:", error);
@@ -44,8 +25,8 @@ class CartManager {
 
   async getCartById(cid) {
     try {
-      const carts = await this.getCarts();
-      return carts.find((cart) => cart.id === cid) || null;
+      const cart = await Cart.findById(cid).populate('products.product');
+      return cart || null;
     } catch (error) {
       console.error(`Error al obtener el carrito con ID ${cid}:`, error);
       return null;
@@ -54,22 +35,18 @@ class CartManager {
 
   async addProductToCart(cid, pid) {
     try {
-      const carts = await this.getCarts();
-      const cartIndex = carts.findIndex((cart) => cart.id === cid);
+      const cart = await Cart.findById(cid);
+      if (!cart) return null;
 
-      if (cartIndex === -1) return null;
-
-      const cart = carts[cartIndex];
-      const productIndex = cart.products.findIndex((p) => p.productId === pid);
+      const productIndex = cart.products.findIndex((p) => p.product.toString() === pid);
 
       if (productIndex === -1) {
-        cart.products.push({ productId: pid, quantity: 1 });
+        cart.products.push({ product: new mongoose.Types.ObjectId(pid), quantity: 1 });
       } else {
         cart.products[productIndex].quantity += 1;
       }
 
-      carts[cartIndex] = cart;
-      await this.saveCarts(carts);
+      await cart.save();
       return cart;
     } catch (error) {
       console.error(`Error al agregar producto ${pid} al carrito ${cid}:`, error);
@@ -79,3 +56,4 @@ class CartManager {
 }
 
 module.exports = CartManager;
+

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Detalle del Producto</title>
+</head>
+<body>
+    <h1>{{product.title}}</h1>
+    <p><strong>Precio:</strong> ${{product.price}}</p>
+    <p><strong>Descripción:</strong> {{product.description}}</p>
+    <p><strong>Categoría:</strong> {{product.category}}</p>
+    <p><strong>Disponibilidad:</strong> 
+        {{#if product.availability}}Disponible{{else}}No disponible{{/if}}
+    </p>
+
+    <button>Agregar al carrito</button>
+
+    <br><br>
+    <a href="/api/products/view">⬅️ Volver a productos</a>
+</body>
+</html>
